@@ -626,7 +626,11 @@ class CookieBot:
                         
                     elif self.current_state == "WAIT_FOR_LOBBY":
                         # ระบบนี้จะทำงานจนกว่าจะเห็นปุ่ม Play! สีเขียวในหน้า Lobby จริงๆ (เปลี่ยน state อัตโนมัติจาก Dynamic State)
-                        if vision.is_center_popup_button(img):
+                        if vision.is_friend_info_popup(img):
+                            self.status_msg = "Friend info popup detected. Closing..."
+                            controller.click_percent(86.5, 10.0)
+                            time.sleep(2.0)
+                        elif vision.is_center_popup_button(img):
                             self.status_msg = "Popup/Box detected! Clicking..."
                             # กด 2 จุด: X=35 (เผื่อมีปุ่ม Open All โผล่มาฝั่งซ้าย) และ X=50 (ปุ่ม Confirm หรือ Open กล่องเดียวตรงกลาง)
                             controller.click_percent(35.0, 85.0)
@@ -637,7 +641,11 @@ class CookieBot:
                             self.status_msg = "Lobby ready. Checking for dropping boxes..."
                             time.sleep(4.0) # รอให้กล่องหล่นลงมาจนเสร็จ (ถ้ามี)
                             img_check = vision.capture_screen()
-                            if vision.is_center_popup_button(img_check):
+                            if vision.is_friend_info_popup(img_check):
+                                self.status_msg = "Friend info popup detected after lobby. Closing..."
+                                controller.click_percent(86.5, 10.0)
+                                time.sleep(2.0)
+                            elif vision.is_center_popup_button(img_check):
                                 self.status_msg = "Box dropped after lobby! Clicking..."
                                 controller.click_percent(35.0, 85.0)
                                 time.sleep(1.5)

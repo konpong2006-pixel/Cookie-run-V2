@@ -383,6 +383,27 @@ class Vision:
                 
         return False
 
+    def is_friend_info_popup(self, img):
+        width, height = img.size
+        teal_cnt = 0
+        close_cnt = 0
+
+        # Friend's Info has a cyan title bar across the upper part of the modal.
+        for y in range(int(height * 0.07), int(height * 0.16), 3):
+            for x in range(int(width * 0.18), int(width * 0.84), 4):
+                r, g, b = img.getpixel((x, y))
+                if g > 120 and b > 120 and r < 120 and abs(g - b) < 80:
+                    teal_cnt += 1
+
+        # Its close button is a red/pink circle near the upper-right of the modal.
+        for y in range(int(height * 0.06), int(height * 0.16), 2):
+            for x in range(int(width * 0.80), int(width * 0.91), 2):
+                r, g, b = img.getpixel((x, y))
+                if r > 140 and g < 150 and b < 170 and r > g + 25:
+                    close_cnt += 1
+
+        return teal_cnt > 80 and close_cnt > 8
+
     def is_center_popup_button(self, img):
         # สแกนหาปุ่ม (ฟ้าอ่อน หรือ เขียว) ช่วงล่างของจอ (X=25-75%)
         # ครอบคลุมทั้งปุ่มตรงกลาง (Open/Confirm) และปุ่มฝั่งซ้าย (Open All)
