@@ -239,6 +239,12 @@ document.addEventListener('DOMContentLoaded', () => {
             toggleUseRelay.checked = data.use_relay;
             toggleUseRelay.dataset.loaded = 'true';
         }
+
+        const toggleRandomBoosters = document.getElementById('toggle-random-boosters');
+        if (toggleRandomBoosters && data.use_random_boosters !== undefined && !toggleRandomBoosters.dataset.loaded) {
+            toggleRandomBoosters.checked = data.use_random_boosters;
+            toggleRandomBoosters.dataset.loaded = 'true';
+        }
     }
     
     // Toggle Settings Visibility based on selected mode
@@ -262,6 +268,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const toggleEl = document.getElementById('toggle-use-fast-start');
         const useTimeoutVal = toggleEl ? toggleEl.checked : false;
         const useRelayVal = document.getElementById('toggle-use-relay') ? document.getElementById('toggle-use-relay').checked : false;
+        const useRandomBoostersVal = document.getElementById('toggle-random-boosters') ? document.getElementById('toggle-random-boosters').checked : true;
         const emulatorTitleVal = document.getElementById('select-emulator') ? document.getElementById('select-emulator').value : null;
         try {
             const res = await fetch('/api/settings', {
@@ -270,6 +277,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify({ 
                     use_timeout: useTimeoutVal,
                     use_relay: useRelayVal,
+                    use_random_boosters: useRandomBoostersVal,
                     emulator_title: emulatorTitleVal
                 })
             });
@@ -292,6 +300,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const toggleUseRelay = document.getElementById('toggle-use-relay');
     if (toggleUseRelay) {
         toggleUseRelay.addEventListener('change', () => {
+            saveSettings();
+        });
+    }
+
+    const toggleRandomBoosters = document.getElementById('toggle-random-boosters');
+    if (toggleRandomBoosters) {
+        toggleRandomBoosters.addEventListener('change', () => {
             saveSettings();
         });
     }
@@ -335,12 +350,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const mode = document.querySelector('input[name="farm-mode"]:checked').value;
         const useRelay = document.getElementById('toggle-use-relay') ? document.getElementById('toggle-use-relay').checked : false;
         const useFastStart = document.getElementById('toggle-use-fast-start') ? document.getElementById('toggle-use-fast-start').checked : false;
+        const useRandomBoosters = document.getElementById('toggle-random-boosters') ? document.getElementById('toggle-random-boosters').checked : true;
         const episode = document.getElementById('select-episode') ? document.getElementById('select-episode').value : 'ep1';
         try {
             const res = await fetch('/api/start', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ mode: mode, use_relay: useRelay, use_fast_start: useFastStart, episode: episode })
+                body: JSON.stringify({ mode: mode, use_relay: useRelay, use_fast_start: useFastStart, use_random_boosters: useRandomBoosters, episode: episode })
             });
             const data = await res.json();
             if (data.status === 'success') {

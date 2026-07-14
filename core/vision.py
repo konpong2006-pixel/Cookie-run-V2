@@ -248,8 +248,50 @@ class Vision:
         return combined_features
 
     def has_get_sign(self, img, rect_pct):
-        # เลิกใช้ OCR
-        return False
+        return self.find_relic_get_button(img, rect_pct) is not None
+
+    def find_relic_get_button(self, img, rect_pct):
+        """Return the center of the Relic Get! badge, or None when absent."""
+        width, height = img.size
+        x1 = int(width * rect_pct[0] / 100.0)
+        y1 = int(height * rect_pct[1] / 100.0)
+        x2 = int(width * (rect_pct[0] + rect_pct[2]) / 100.0)
+        y2 = int(height * (rect_pct[1] + rect_pct[3]) / 100.0)
+
+        red_pixels = 0
+        white_pixels = 0
+        min_x, min_y = x2, y2
+        max_x, max_y = x1, y1
+        for y in range(y1, y2, 2):
+            for x in range(x1, x2, 2):
+                r, g, b = img.getpixel((x, y))
+                if r > 160 and g < 130 and b < 140 and r > g + 55:
+                    red_pixels += 1
+                    min_x = min(min_x, x)
+                    min_y = min(min_y, y)
+                    max_x = max(max_x, x)
+                    max_y = max(max_y, y)
+                elif r > 210 and g > 210 and b > 210:
+                    white_pixels += 1
+
+        if red_pixels >= 80 and white_pixels >= 12:
+            center_x = (min_x + max_x) / 2.0
+            center_y = (min_y + max_y) / 2.0
+            return (center_x * 100.0 / width, center_y * 100.0 / height)
+
+        return None
+
+    def is_relic_claim_active(self, img):
+        """Return True while the Relic screen has a bright green Claim button."""
+        width, height = img.size
+        bright_green = 0
+        for y in range(int(height * 0.74), int(height * 0.87), 3):
+            for x in range(int(width * 0.39), int(width * 0.61), 3):
+                r, g, b = img.getpixel((x, y))
+                if g > 135 and g > r + 35 and g > b + 25:
+                    bright_green += 1
+
+        return bright_green >= 80
 
     def is_relay_window(self, img, rect_pct):
         # Scan a box around the center where the green Relay button background is expected.

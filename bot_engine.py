@@ -21,6 +21,7 @@ class CookieBot:
         self.coin_timeout = 205
         self.box_timeout = 150
         self.use_timeout = True
+        self.use_random_boosters = True
         self.emulator_title = EMULATOR_WINDOW_TITLE
         
         # ข้อมูลสำหรับ Screen Stream
@@ -79,6 +80,11 @@ class CookieBot:
             return self.use_relay.strip().lower() in ("1", "true", "yes", "on")
         return bool(self.use_relay)
 
+    def _is_booster_roll_enabled(self):
+        if isinstance(self.use_random_boosters, str):
+            return self.use_random_boosters.strip().lower() in ("1", "true", "yes", "on")
+        return bool(self.use_random_boosters)
+
     def _try_use_relay(self, controller, vision, img, relay_used):
         if relay_used or not self._is_relay_enabled():
             return False
@@ -93,12 +99,22 @@ class CookieBot:
             time.sleep(0.35)
         return True
 
-    def start(self, mode="COIN", use_relay=False, use_fast_start=False, episode="ep1"):
+    def _wait_for_relic_claim_state(self, vision, should_be_active, timeout_seconds):
+        deadline = time.time() + timeout_seconds
+        while self.running and time.time() < deadline:
+            img = vision.capture_screen()
+            if vision.is_relic_claim_active(img) == should_be_active:
+                return True
+            time.sleep(1.0)
+        return False
+
+    def start(self, mode="COIN", use_relay=False, use_fast_start=False, use_random_boosters=True, episode="ep1"):
         if not self.running:
             self.running = True
             self.farm_mode = mode
             self.use_relay = use_relay
             self.use_fast_start = use_fast_start
+            self.use_random_boosters = use_random_boosters
             self.episode = episode
             self.current_state = "LOBBY"
             self.ai = AILearner(game_mode=self.farm_mode)
@@ -128,6 +144,7 @@ class CookieBot:
             "coin_timeout": self.coin_timeout,
             "box_timeout": self.box_timeout,
             "use_timeout": self.use_timeout,
+            "use_random_boosters": self._is_booster_roll_enabled(),
             "farm_mode": self.farm_mode,
             "emulator_title": self.emulator_title,
             "box_pattern": getattr(self, 'box_pattern', None),
@@ -268,26 +285,62 @@ class CookieBot:
                     if self.current_state == "LOBBY":
                         self.status_msg = "Checking Lobby status..."
                         
-                        if self.farm_mode == "BOX_RELIC" and vision.has_get_sign(img, LOBBY_RELIC_GET_AREA):
-                            self.status_msg = "Claiming relic..."
-                            controller.click_percent(*LOBBY_RELIC_CLAIM)
-                            time.sleep(2)
-                            controller.click_percent(*POPUP_RELIC_CLAIM_BTN)
-                            time.sleep(2)
-                            controller.click_percent(*POPUP_RELIC_CLAIM_BTN)
-                            time.sleep(2)
-                            controller.click_percent(*LOBBY_RELIC_CLOSE)
-                            time.sleep(3)
+                        relic_get_position = None
+                        if self.farm_mode == "BOX_RELIC":
+                            relic_get_position = vision.find_relic_get_button(img, LOBBY_RELIC_GET_AREA)
+
+                        if relic_get_position:
+                            self.status_msg = "Relic reward available. Opening Relic..."
+                            controller.click_percent(*relic_get_position, randomize=False)
+                            time.sleep(5.0)
+
+                            self.status_msg = "Waiting for Relic Claim button..."
+                            while self.running and not self._wait_for_relic_claim_state(vision, True, 15.0):
+                                self.status_msg = "Relic screen is still loading. Waiting..."
+                                time.sleep(5.0)
+                            if not self.running:
+                                break
+
+                            self.status_msg = "Claiming Relic reward..."
+                            controller.click_percent(*POPUP_RELIC_CLAIM_BTN, randomize=False)
+                            time.sleep(6.0)
+
+                            self.status_msg = "Confirming Relic reward..."
+                            controller.click_percent(*POPUP_RELIC_CONFIRM_BTN, randomize=False)
+                            time.sleep(7.0)
+
+                            self.status_msg = "Waiting for Relic reward to finish..."
+                            while self.running and not self._wait_for_relic_claim_state(vision, False, 20.0):
+                                self.status_msg = "Relic reward is still pending. Retrying confirmation..."
+                                controller.click_percent(*POPUP_RELIC_CONFIRM_BTN, randomize=False)
+                                time.sleep(7.0)
+                            if not self.running:
+                                break
+
+                            time.sleep(4.0)
+
+                            self.status_msg = "Closing Relic screen..."
+                            controller.click_percent(*LOBBY_RELIC_CLOSE, randomize=False)
+                            time.sleep(4.0)
                         
                         self.status_msg = "Pressing Play..."
                         controller.click_percent(*LOBBY_PLAY_BTN)
                         time.sleep(6.0) # รอหน้าต่าง Prep โหลดให้เสร็จสมบูรณ์เผื่อเครื่องช้า
                         self.current_state = "PREP"
                     elif self.current_state == "PREP":
+                        self.status_msg = "Checking booster roll setting..."
+                        time.sleep(3)
                         time.sleep(2) # รอให้ UI หน้า Prep นิ่ง
                         
                         # นำระบบเช็คว่าค้างอยู่หน้า Lobby ออก เพราะปุ่มมันเขียวและตำแหน่งเดียวกัน ทำให้บอทสับสนและกดเบิ้ล
                             
+                        if not self._is_booster_roll_enabled():
+                            self.status_msg = "Booster roll disabled. Starting game..."
+                            controller.click_percent(*PREP_START_GAME)
+                            time.sleep(2)
+                            self.current_state = "GAMEPLAY"
+                            continue
+
                         self.status_msg = f"Rolling Boosters ({self.farm_mode} Mode)..."
                         
                         # 1. กดกล่องสุ่ม

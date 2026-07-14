@@ -55,11 +55,12 @@ def start_bot():
     mode = data.get('mode', 'COIN')
     use_relay = as_bool(data.get('use_relay', False))
     use_fast_start = as_bool(data.get('use_fast_start', False))
+    use_random_boosters = as_bool(data.get('use_random_boosters', True))
     episode = data.get('episode', 'ep1')
     if bot_instance.running:
         return jsonify({"status": "error", "message": "Bot is already running!"}), 400
     
-    bot_instance.start(mode=mode, use_relay=use_relay, use_fast_start=use_fast_start, episode=episode)
+    bot_instance.start(mode=mode, use_relay=use_relay, use_fast_start=use_fast_start, use_random_boosters=use_random_boosters, episode=episode)
     return jsonify({"status": "success", "message": f"Started {mode} farm"})
 
 @app.route('/api/reset_ai', methods=['POST'])
@@ -95,6 +96,7 @@ def shutdown_server():
 def get_status():
     status = bot_instance.get_status()
     status["use_relay"] = getattr(bot_instance, "use_relay", False)
+    status["use_random_boosters"] = getattr(bot_instance, "use_random_boosters", True)
     return jsonify(status)
 
 @app.route('/api/ai_stats', methods=['GET'])
@@ -110,6 +112,7 @@ def update_settings():
     box_timeout = data.get('box_timeout')
     use_timeout = data.get('use_timeout')
     use_relay = data.get('use_relay')
+    use_random_boosters = data.get('use_random_boosters')
     emulator_title = data.get('emulator_title')
     
     try:
@@ -121,6 +124,8 @@ def update_settings():
             bot_instance.use_timeout = as_bool(use_timeout)
         if use_relay is not None:
             bot_instance.use_relay = as_bool(use_relay)
+        if use_random_boosters is not None:
+            bot_instance.use_random_boosters = as_bool(use_random_boosters)
         if emulator_title:
             bot_instance.emulator_title = emulator_title
     except ValueError:

@@ -18,9 +18,9 @@ BASE_HEIGHT = 720
 # ==========================================
 # 1. Lobby
 LOBBY_PLAY_BTN = (82.0, 85.0)
-LOBBY_RELIC_CLAIM = (45.0, 15.0)
-LOBBY_RELIC_GET_AREA = (40.0, 8.0, 50.0, 20.0) # พื้นที่สแกนคำว่า Get
-LOBBY_RELIC_CLOSE = (90.0, 10.0) # ปุ่มปิดหน้าต่าง Relic สมมติขวาบน
+LOBBY_RELIC_CLAIM = (41.3, 11.7)
+LOBBY_RELIC_GET_AREA = (38.0, 8.5, 7.0, 5.7)
+LOBBY_RELIC_CLOSE = (84.2, 21.4)
 
 # 2. Prep Screen
 PREP_RANDOM_BOOST = (43.0, 82.0)    # กล่องสุ่ม Mystery Box (แถว 2 คอลัมน์ 3)
@@ -73,4 +73,5 @@ CLICK_DELAY_MIN = 0.05
 CLICK_DELAY_MAX = 0.15
 TOUCH_HOLD_TIME = 0.05
 JUMP_INTERVAL = 0.8 # กระโดดทุก 0.8 วิ
-POPUP_RELIC_CLAIM_BTN = (50.0, 85.0)
+POPUP_RELIC_CLAIM_BTN = (50.0, 80.6)
+POPUP_RELIC_CONFIRM_BTN = (50.0, 79.7)
