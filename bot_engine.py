@@ -108,6 +108,20 @@ class CookieBot:
             time.sleep(1.0)
         return False
 
+    def _wait_for_stable_lobby(self, vision, checks=3, delay_seconds=2.0):
+        """Require several clean Lobby frames before allowing the next Play click."""
+        for _ in range(checks):
+            if not self.running:
+                return False
+
+            img = vision.capture_screen()
+            if not vision.is_lobby_screen(img) or vision.is_friend_info_popup(img):
+                return False
+
+            time.sleep(delay_seconds)
+
+        return True
+
     def start(self, mode="COIN", use_relay=False, use_fast_start=False, use_random_boosters=True, episode="ep1"):
         if not self.running:
             self.running = True
@@ -116,10 +130,10 @@ class CookieBot:
             self.use_fast_start = use_fast_start
             self.use_random_boosters = use_random_boosters
             self.episode = episode
-            self.current_state = "LOBBY"
+            self.current_state = "WAIT_FOR_LOBBY"
             self.ai = AILearner(game_mode=self.farm_mode)
             self.run_start_time = time.time()
-            self.status_msg = f"Starting in {mode} mode..."
+            self.status_msg = f"Starting in {mode} mode. Waiting for confirmed Lobby..."
             self.thread = threading.Thread(target=self._run_loop, daemon=True)
             self.thread.start()
 
@@ -269,6 +283,12 @@ class CookieBot:
                         
                     # ถ้าภาพนิ่งสนิทเกิน 10 วินาที (100 เฟรม) และไม่ได้อยู่ใน GAMEPLAY (ซึ่งมีระบบจับภาพนิ่งของตัวเองอยู่แล้ว)
                     if global_static_frames > 100 and self.current_state != "GAMEPLAY":
+                        if vision.is_lobby_screen(img):
+                            self.status_msg = "Lobby is idle. Watchdog recovery skipped."
+                            global_static_frames = 0
+                            time.sleep(1)
+                            continue
+
                         self.status_msg = "Anti-Stuck Watchdog: Recovering from frozen state (10s)!"
                         # 1. กดตำแหน่งปุ่ม OK แถวล่าง (ครอบคลุมปุ่มซ้าย กลาง ขวา เลี่ยงรายชื่อเพื่อน)
                         controller.click_percent(35.0, 85.0)
@@ -278,7 +298,7 @@ class CookieBot:
                         controller.click_percent(57.0, 85.0)
                         time.sleep(1)
                         # 2. กดมุมขวาบน (ปิดกากบาทของ Event / Daily Rewards หรือ Popup อื่นๆ)
-                        controller.click_percent(90.0, 10.0)
+                        # The top-right lobby area contains Party Run, so never click it blindly.
                         time.sleep(1)
                         global_static_frames = 0 # รีเซ็ตแล้วลุยต่อ
                     
@@ -290,9 +310,39 @@ class CookieBot:
                             relic_get_position = vision.find_relic_get_button(img, LOBBY_RELIC_GET_AREA)
 
                         if relic_get_position:
-                            self.status_msg = "Relic reward available. Opening Relic..."
-                            controller.click_percent(*relic_get_position, randomize=False)
-                            time.sleep(5.0)
+                            relic_opened = False
+                            while self.running and not relic_opened:
+                                opening_img = vision.capture_screen()
+                                if vision.is_relic_screen(opening_img):
+                                    relic_opened = True
+                                    break
+
+                                relic_get_position = vision.find_relic_get_button(opening_img, LOBBY_RELIC_GET_AREA)
+                                if not relic_get_position:
+                                    self.status_msg = "Get button is not visible. Waiting in Lobby..."
+                                    time.sleep(3.0)
+                                    continue
+
+                                self.status_msg = "Relic reward available. Opening Relic..."
+                                controller.click_percent(*LOBBY_RELIC_CLAIM, randomize=False, background=True)
+                                time.sleep(3.0)
+
+                                for _ in range(6):
+                                    if not self.running:
+                                        break
+                                    if vision.is_relic_screen(vision.capture_screen()):
+                                        relic_opened = True
+                                        break
+                                    time.sleep(1.0)
+
+                                if relic_opened or not self.running:
+                                    break
+
+                                self.status_msg = "Relic did not open. Finding Get button again..."
+                                time.sleep(2.0)
+
+                            if not self.running:
+                                break
 
                             self.status_msg = "Waiting for Relic Claim button..."
                             while self.running and not self._wait_for_relic_claim_state(vision, True, 15.0):
@@ -302,17 +352,35 @@ class CookieBot:
                                 break
 
                             self.status_msg = "Claiming Relic reward..."
-                            controller.click_percent(*POPUP_RELIC_CLAIM_BTN, randomize=False)
+                            relic_button = vision.find_relic_primary_button(vision.capture_screen())
+                            while self.running and not relic_button:
+                                self.status_msg = "Relic Claim button was not found. Waiting..."
+                                time.sleep(3.0)
+                                relic_button = vision.find_relic_primary_button(vision.capture_screen())
+                            if not self.running:
+                                break
+                            controller.click_percent(*relic_button, randomize=False)
                             time.sleep(6.0)
 
                             self.status_msg = "Confirming Relic reward..."
-                            controller.click_percent(*POPUP_RELIC_CONFIRM_BTN, randomize=False)
+                            relic_button = vision.find_relic_primary_button(vision.capture_screen())
+                            while self.running and not relic_button:
+                                self.status_msg = "Relic Confirm button was not found. Waiting..."
+                                time.sleep(3.0)
+                                relic_button = vision.find_relic_primary_button(vision.capture_screen())
+                            if not self.running:
+                                break
+                            controller.click_percent(*relic_button, randomize=False)
                             time.sleep(7.0)
 
                             self.status_msg = "Waiting for Relic reward to finish..."
                             while self.running and not self._wait_for_relic_claim_state(vision, False, 20.0):
                                 self.status_msg = "Relic reward is still pending. Retrying confirmation..."
-                                controller.click_percent(*POPUP_RELIC_CONFIRM_BTN, randomize=False)
+                                relic_button = vision.find_relic_primary_button(vision.capture_screen())
+                                if not relic_button:
+                                    time.sleep(3.0)
+                                    continue
+                                controller.click_percent(*relic_button, randomize=False)
                                 time.sleep(7.0)
                             if not self.running:
                                 break
@@ -320,11 +388,18 @@ class CookieBot:
                             time.sleep(4.0)
 
                             self.status_msg = "Closing Relic screen..."
-                            controller.click_percent(*LOBBY_RELIC_CLOSE, randomize=False)
+                            relic_close = vision.find_relic_close_button(vision.capture_screen())
+                            while self.running and not relic_close:
+                                self.status_msg = "Relic close button was not found. Keeping screen open..."
+                                time.sleep(3.0)
+                                relic_close = vision.find_relic_close_button(vision.capture_screen())
+                            if not self.running:
+                                break
+                            controller.click_percent(*relic_close, randomize=False)
                             time.sleep(4.0)
                         
                         self.status_msg = "Pressing Play..."
-                        controller.click_percent(*LOBBY_PLAY_BTN)
+                        controller.click_percent(*LOBBY_PLAY_BTN, randomize=False)
                         time.sleep(6.0) # รอหน้าต่าง Prep โหลดให้เสร็จสมบูรณ์เผื่อเครื่องช้า
                         self.current_state = "PREP"
                     elif self.current_state == "PREP":
@@ -672,7 +747,7 @@ class CookieBot:
                         controller.click_percent(35.0, 85.0)
                         
                         # รอให้หน้า Result หายไป เพื่อป้องกันการกดพลาดตอนโหลด
-                        time.sleep(4)
+                        time.sleep(6)
                         
                         self.status_msg = "Transitioning to Lobby..."
                         self.current_state = "WAIT_FOR_LOBBY"
@@ -681,9 +756,9 @@ class CookieBot:
                         # ระบบนี้จะทำงานจนกว่าจะเห็นปุ่ม Play! สีเขียวในหน้า Lobby จริงๆ (เปลี่ยน state อัตโนมัติจาก Dynamic State)
                         if vision.is_friend_info_popup(img):
                             self.status_msg = "Friend info popup detected. Closing..."
-                            controller.click_percent(86.5, 10.0)
-                            time.sleep(2.0)
-                        elif vision.is_center_popup_button(img):
+                            controller.click_percent(90.0, 10.0)
+                            time.sleep(3.0)
+                        elif vision.is_center_popup_button(img) and not vision.is_lobby_screen(img):
                             self.status_msg = "Popup/Box detected! Clicking..."
                             # กด 2 จุด: X=35 (เผื่อมีปุ่ม Open All โผล่มาฝั่งซ้าย) และ X=50 (ปุ่ม Confirm หรือ Open กล่องเดียวตรงกลาง)
                             controller.click_percent(35.0, 85.0)
@@ -691,14 +766,21 @@ class CookieBot:
                             controller.click_percent(50.0, 85.0)
                             time.sleep(5.5)
                         elif vision.is_lobby_screen(img):
-                            self.status_msg = "Lobby ready. Checking for dropping boxes..."
+                            self.status_msg = "Lobby detected. Verifying stable screen..."
+                            if not self._wait_for_stable_lobby(vision):
+                                self.status_msg = "Lobby is not stable yet. Waiting..."
+                                time.sleep(2.0)
+                                continue
+
+                            self.status_msg = "Lobby confirmed. Checking for dropping boxes..."
+                            time.sleep(3.0)
                             time.sleep(4.0) # รอให้กล่องหล่นลงมาจนเสร็จ (ถ้ามี)
                             img_check = vision.capture_screen()
                             if vision.is_friend_info_popup(img_check):
                                 self.status_msg = "Friend info popup detected after lobby. Closing..."
-                                controller.click_percent(86.5, 10.0)
-                                time.sleep(2.0)
-                            elif vision.is_center_popup_button(img_check):
+                                controller.click_percent(90.0, 10.0)
+                                time.sleep(3.0)
+                            elif vision.is_center_popup_button(img_check) and not vision.is_lobby_screen(img_check):
                                 self.status_msg = "Box dropped after lobby! Clicking..."
                                 controller.click_percent(35.0, 85.0)
                                 time.sleep(1.5)

@@ -283,6 +283,9 @@ class Vision:
 
     def is_relic_claim_active(self, img):
         """Return True while the Relic screen has a bright green Claim button."""
+        if not self.is_relic_screen(img):
+            return False
+
         width, height = img.size
         bright_green = 0
         for y in range(int(height * 0.74), int(height * 0.87), 3):
@@ -292,6 +295,77 @@ class Vision:
                     bright_green += 1
 
         return bright_green >= 80
+
+    def is_relic_screen(self, img):
+        """Detect the wide cyan Relic title banner in the center of the screen."""
+        width, height = img.size
+        teal_pixels = 0
+        total_pixels = 0
+
+        for y in range(int(height * 0.10), int(height * 0.27), 3):
+            for x in range(int(width * 0.28), int(width * 0.72), 3):
+                r, g, b = img.getpixel((x, y))
+                if r < 110 and g > 120 and b > 120 and abs(g - b) < 90:
+                    teal_pixels += 1
+                total_pixels += 1
+
+        return total_pixels > 0 and teal_pixels / total_pixels > 0.20
+
+    def find_relic_primary_button(self, img):
+        """Return the center of the bright green Claim or Confirm button."""
+        if not self.is_relic_screen(img):
+            return None
+
+        width, height = img.size
+        x1, x2 = int(width * 0.35), int(width * 0.65)
+        y1, y2 = int(height * 0.70), int(height * 0.88)
+        min_x, min_y = x2, y2
+        max_x, max_y = x1, y1
+        green_pixels = 0
+
+        for y in range(y1, y2, 2):
+            for x in range(x1, x2, 2):
+                r, g, b = img.getpixel((x, y))
+                if g > 135 and g > r + 35 and g > b + 25:
+                    green_pixels += 1
+                    min_x = min(min_x, x)
+                    min_y = min(min_y, y)
+                    max_x = max(max_x, x)
+                    max_y = max(max_y, y)
+
+        if green_pixels < 100:
+            return None
+
+        return ((min_x + max_x) * 50.0 / width,
+                (min_y + max_y) * 50.0 / height)
+
+    def find_relic_close_button(self, img):
+        """Return the center of the gray X button in the Relic window."""
+        if not self.is_relic_screen(img):
+            return None
+
+        width, height = img.size
+        x1, x2 = int(width * 0.79), int(width * 0.90)
+        y1, y2 = int(height * 0.15), int(height * 0.28)
+        min_x, min_y = x2, y2
+        max_x, max_y = x1, y1
+        gray_pixels = 0
+
+        for y in range(y1, y2, 2):
+            for x in range(x1, x2, 2):
+                r, g, b = img.getpixel((x, y))
+                if r > 135 and g > 135 and b > 135 and max(r, g, b) - min(r, g, b) < 55:
+                    gray_pixels += 1
+                    min_x = min(min_x, x)
+                    min_y = min(min_y, y)
+                    max_x = max(max_x, x)
+                    max_y = max(max_y, y)
+
+        if gray_pixels < 30:
+            return None
+
+        return ((min_x + max_x) * 50.0 / width,
+                (min_y + max_y) * 50.0 / height)
 
     def is_relay_window(self, img, rect_pct):
         # Scan a box around the center where the green Relay button background is expected.
@@ -428,23 +502,29 @@ class Vision:
     def is_friend_info_popup(self, img):
         width, height = img.size
         teal_cnt = 0
+        teal_total = 0
         close_cnt = 0
+        close_total = 0
 
-        # Friend's Info has a cyan title bar across the upper part of the modal.
+        # Friend's Info has a wide cyan title bar, unlike the narrow Episode button.
         for y in range(int(height * 0.07), int(height * 0.16), 3):
             for x in range(int(width * 0.18), int(width * 0.84), 4):
                 r, g, b = img.getpixel((x, y))
                 if g > 120 and b > 120 and r < 120 and abs(g - b) < 80:
                     teal_cnt += 1
+                teal_total += 1
 
-        # Its close button is a red/pink circle near the upper-right of the modal.
+        # Its close button is a large gray circle near the upper-right of the modal.
         for y in range(int(height * 0.06), int(height * 0.16), 2):
             for x in range(int(width * 0.80), int(width * 0.91), 2):
                 r, g, b = img.getpixel((x, y))
-                if r > 140 and g < 150 and b < 170 and r > g + 25:
+                if r > 120 and g > 120 and b > 120 and max(r, g, b) - min(r, g, b) < 35:
                     close_cnt += 1
+                close_total += 1
 
-        return teal_cnt > 80 and close_cnt > 8
+        return (teal_total > 0 and close_total > 0
+                and teal_cnt / teal_total > 0.35
+                and close_cnt / close_total > 0.12)
 
     def is_center_popup_button(self, img):
         # สแกนหาปุ่ม (ฟ้าอ่อน หรือ เขียว) ช่วงล่างของจอ (X=25-75%)

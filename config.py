@@ -17,8 +17,8 @@ BASE_HEIGHT = 720
 # 📍 COORDINATES & SCAN AREAS (Percentage 0.0 - 100.0)
 # ==========================================
 # 1. Lobby
-LOBBY_PLAY_BTN = (82.0, 85.0)
-LOBBY_RELIC_CLAIM = (41.3, 11.7)
+LOBBY_PLAY_BTN = (74.5, 89.5)
+LOBBY_RELIC_CLAIM = (41.5, 15.5)
 LOBBY_RELIC_GET_AREA = (38.0, 8.5, 7.0, 5.7)
 LOBBY_RELIC_CLOSE = (84.2, 21.4)
 

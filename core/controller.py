@@ -19,7 +19,7 @@ class Controller:
         offset = random.uniform(-CLICK_OFFSET_PCT, CLICK_OFFSET_PCT)
         return max(0.0, min(100.0, val_pct + offset))
 
-    def click_percent(self, x_pct, y_pct, randomize=True):
+    def click_percent(self, x_pct, y_pct, randomize=True, background=False):
         """
         กดคลิกที่ตำแหน่ง x, y (เปอร์เซ็นต์) พร้อมระบบจำลองนิ้วคน (Anti-Ban)
         """
@@ -38,6 +38,13 @@ class Controller:
 
         # ส่งสัญญาณคลิกซ้าย
         lParam = (cy << 16) | cx
+        if background:
+            win32gui.SendMessage(self.render_hwnd, win32con.WM_MOUSEMOVE, 0, lParam)
+            win32gui.SendMessage(self.render_hwnd, win32con.WM_LBUTTONDOWN, win32con.MK_LBUTTON, lParam)
+            time.sleep(TOUCH_HOLD_TIME)
+            win32gui.SendMessage(self.render_hwnd, win32con.WM_LBUTTONUP, 0, lParam)
+            print(f"[*] Background click at {x_pct:.1f}%, {y_pct:.1f}% -> ({cx}, {cy})")
+            return
         win32gui.PostMessage(self.render_hwnd, win32con.WM_LBUTTONDOWN, win32con.MK_LBUTTON, lParam)
         
         # หน่วงเวลาจำลองการกดนิ้วค้าง
